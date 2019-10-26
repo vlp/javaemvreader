@@ -54,23 +54,26 @@ public class EMVUtil {
      */
     //TODO remove this and replace with CLS/INS bit indication (response formatted in a TLV structure)
     public static CardResponse sendCmdNoParse(CardConnection terminal, byte[] cmd) throws TerminalException {
-        return sendCmdInternal(terminal, cmd, false);
+        return sendCmdInternal(terminal, cmd, false, true);
     }
 
     public static CardResponse sendCmd(CardConnection terminal, byte[] cmd) throws TerminalException {
-        return sendCmdInternal(terminal, cmd, true);
+        return sendCmdInternal(terminal, cmd, true, true);
     }
     public static CardResponse sendCmdNoParse(CardConnection terminal, String cmd) throws TerminalException {
-        return sendCmdInternal(terminal, Util.fromHexString(cmd), false);
+        return sendCmdInternal(terminal, Util.fromHexString(cmd), false, true);
+    }
+    public static CardResponse sendCmdNoParseDoNotAddLe(CardConnection terminal, byte[] cmd) throws TerminalException {
+    	return sendCmdInternal(terminal, cmd, false, false);
     }
 
     public static CardResponse sendCmd(CardConnection terminal, String cmd) throws TerminalException {
-        return sendCmdInternal(terminal, Util.fromHexString(cmd), true);
+        return sendCmdInternal(terminal, Util.fromHexString(cmd), true, true);
     }
 
     //TODO move this to generic ISO7816 routine?
-    private static CardResponse sendCmdInternal(CardConnection terminal, byte[] cmd, boolean doParseTLVData) throws TerminalException {
-        byte[] cmdBytes = checkAndAddLeIfMissing(cmd);
+    private static CardResponse sendCmdInternal(CardConnection terminal, byte[] cmd, boolean doParseTLVData, boolean addLeIfNeeded) throws TerminalException {
+        byte[] cmdBytes = checkAndAddLeIfMissing(cmd, addLeIfNeeded);
         Log.command(Util.prettyPrintHex(cmdBytes));
         long startTime = System.nanoTime();
         CardResponse response = terminal.transmit(cmdBytes);
@@ -127,7 +130,7 @@ public class EMVUtil {
     }
 
     //TODO support extended length
-    public static byte[] checkAndAddLeIfMissing(byte[] cmd) {
+    public static byte[] checkAndAddLeIfMissing(byte[] cmd, boolean addLeIfNeeded) {
         if(cmd == null) {
             throw new IllegalArgumentException("Cmd cannot be null");
         }
@@ -148,7 +151,7 @@ public class EMVUtil {
                     ) {
                 throw new IllegalArgumentException("Lc was "+lc+", but payload length was "+(cmd.length-5) + " (Le presence unknown)");
             }
-            if(lc == cmd.length-5) {
+            if((addLeIfNeeded)&&(lc == cmd.length-5)) {
                 //Add Le
                 byte[] cmdWithLe = new byte[cmd.length+1];
                 System.arraycopy(cmd, 0, cmdWithLe, 0, cmd.length);
