@@ -27,6 +27,7 @@ import sasc.iso7816.AID;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import sasc.emv.system.visa.VISATags;
 import sasc.iso7816.ATR;
@@ -735,6 +736,38 @@ public class EMVUtil {
         }
 
     }
+
+    // TODO: What might be the correct location for this?
+    public static byte[] makeFormat2PinBlock(char[] pin) {
+        if (pin.length < 4 || pin.length > 12) { //0x0C
+            throw new SmartCardException("Invalid PIN length. Must be in the range 4 to 12. Length=" + pin.length);
+        }
+        for(char c : pin){
+            if(!Character.isDigit(c)) {
+                throw new SmartCardException("Only decimal digits allowed in PIN");
+            }
+        }
+    	byte[] pinblock = new byte[8];
+    	pinblock[0] = (byte)(0x20 | pin.length); //Control field (binary 0010xxxx)
+        //The remaining 8 bytes is the plaintext Offline PIN Block. This block is split into nibbles (4 bits)
+        Arrays.fill(pinblock, 1, pinblock.length, (byte)0xFF); //Filler bytes
+
+        boolean highNibble = true; //Alternate between high and low nibble
+        for (int i = 0; i < pin.length; i++) { //Put each PIN digit into its own nibble
+            int pos = i / 2;
+            int digit = Character.digit(pin[i], 10);
+            if (highNibble) {
+            	pinblock[1 + pos] &= (byte) 0x0F; //Clear bits
+                pinblock[1 + pos] |= (byte) (digit << 4);
+
+            } else {
+                pinblock[1 + pos] &= (byte) 0xF0; //Clear bits
+                pinblock[1 + pos] |= (byte) (digit);
+            }
+            highNibble = !highNibble;
+        }
+        return pinblock;
+	}
 
     public static void main(String[] args) {
 

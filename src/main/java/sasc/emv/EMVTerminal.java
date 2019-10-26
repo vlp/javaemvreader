@@ -342,10 +342,9 @@ public class EMVTerminal {
     
     public static boolean isCVMSupported(CVRule rule) {
         switch(rule.getRule()) {
-            //TODO support enciphered PIN
             case ENCIPHERED_PIN_VERIFIED_BY_ICC:
+            	return hasPinInputOfflineCapability();
             case ENCIPHERED_PIN_VERIFIED_BY_ICC_AND_SIGNATURE_ON_PAPER:
-                return false;
             case PLAINTEXT_PIN_VERIFIED_BY_ICC_AND_SIGNATURE_ON_PAPER:
             	return hasPinInputOfflineCapability() && hasSignatureOnPaper();
             case PLAINTEXT_PIN_VERIFIED_BY_ICC:

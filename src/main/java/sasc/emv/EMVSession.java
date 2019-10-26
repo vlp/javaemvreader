@@ -23,6 +23,7 @@ import sasc.iso7816.BERTLV;
 import sasc.iso7816.AID;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
@@ -1126,7 +1127,7 @@ public class EMVSession {
             return false;
         }
         
-        byte[] command;
+        byte[] command=null;
         
         while(app.getPINTryCounter() != 0) {
         
@@ -1140,30 +1141,70 @@ public class EMVSession {
                 return false;
             }
             
-            if(encipherPin) {                
-                //Recover the public key to be used for PIN encipherment
-                ICCPublicKeyCertificate iccPKCert = app.getICCPublicKeyCertificate();
-                if(iccPKCert == null || !iccPKCert.validate() || iccPKCert.getICCPublicKey() == null) {
-                    Log.debug("Unable to encipher PIN: ICC Public Key Certificate not valid");
-                    return false;
-                }
-                
-                //Get unpredictable number from ICC
-                byte[] challenge = getChallenge();
-                if(challenge.length != 8) {
-                    Log.debug("Unable to encipher PIN: GET CHALLENGE returned response length "+challenge.length);
-                    return false;
-                }
-                
-                //TODO encipher PIN
-            }
-            
-            command = EMVAPDUCommands.verifyPIN(pin, !encipherPin);
-            Arrays.fill(pin, ' ');
-            
-            Log.commandHeader("Send VERIFY (PIN) command");
+            byte[] pinBlock=null;
+            byte[] pinData=null;
 
-            CardResponse verifyResponse = EMVUtil.sendCmd(terminal, command);
+            CardResponse verifyResponse;
+
+            try {
+
+	            // Build a PIN Block
+				pinBlock = EMVUtil.makeFormat2PinBlock(pin);
+	            Arrays.fill(pin, ' ');
+
+	            if(encipherPin) {
+	                //Recover the public key to be used for PIN encipherment
+	                ICCPublicKeyCertificate iccPKCert = app.getICCPublicKeyCertificate();
+	                if(iccPKCert == null || !iccPKCert.validate() || iccPKCert.getICCPublicKey() == null) {
+	                    Log.debug("Unable to encipher PIN: ICC Public Key Certificate not valid");
+	                    return false;
+	                }
+
+	                //Get unpredictable number from ICC
+	                byte[] challenge = getChallenge();
+	                if(challenge.length != 8) {
+	                    Log.debug("Unable to encipher PIN: GET CHALLENGE response has invalid length (" + challenge.length + ")");
+	                    return false;
+	                }
+
+	                ICCPublicKey iccPublicKey = iccPKCert.getICCPublicKey();
+
+	                // Data to be Enciphered (Book2, 7.2)
+					pinData = new byte[iccPublicKey.getKeyLengthInBytes()];
+	                ByteBuffer encipheredPinBb = ByteBuffer.wrap(pinData);
+	                encipheredPinBb.put((byte)0x7F); // Data Header
+	                encipheredPinBb.put(pinBlock);
+	                Arrays.fill(pinBlock, (byte)0x00);
+	                encipheredPinBb.put(challenge);
+	                encipheredPinBb.put(Util.generateRandomBytes(encipheredPinBb.remaining()));
+
+	                // Encrypt
+	                byte[] encryptedPinData = Util.performRSA(pinData, iccPublicKey.getExponent(), iccPublicKey.getModulus());
+	                Arrays.fill(pinData, (byte)0x00);
+
+	                command = EMVAPDUCommands.verifyPIN((byte)0x88, encryptedPinData);
+	            } else {
+	            	command = EMVAPDUCommands.verifyPIN((byte)0x80, pinBlock);
+	            	Arrays.fill(pinBlock, (byte)0x00);
+	            }
+
+	            Log.commandHeader("Send VERIFY (PIN) command");
+
+				verifyResponse = EMVUtil.sendCmdNoParseDoNotAddLe(terminal, command);
+            } finally {
+            	if(pin!=null) {
+            		Arrays.fill(pin, ' ');
+            	}
+            	if(pinBlock!=null) {
+            		Arrays.fill(pinBlock, (byte)0x00);
+            	}
+            	if(pinData!=null) {
+            		Arrays.fill(pinData, (byte)0x00);
+            	}
+            	if(command!=null) {
+            		Arrays.fill(command, (byte)0x00);
+            	}
+            }
 
             if (verifyResponse.getSW() == SW.SUCCESS.getSW()) {
                 //Try to update PTC

@@ -165,61 +165,26 @@ public class EMVAPDUCommands {
      *
      * Case 3 C-APDU
      *
-     * @param pin the PIN to verify
-     * @param transmitInPlaintext
+     * @param p2Qualifier reference data qualifier
+     * @param pinData PIN data (plain or enciphered to be sent)
      * @return
      */
-    public static byte[] verifyPIN(char[] pin, boolean transmitInPlaintext) {
-        if (pin.length < 4 || pin.length > 12) { //0x0C
-            throw new SmartCardException("Invalid PIN length. Must be in the range 4 to 12. Length=" + pin.length);
-        }
-        for(char c : pin){
-            if(!Character.isDigit(c)) {
-                throw new SmartCardException("Only decimal digits allowed in PIN");
-            }
-        }
-        byte[] cmd = new byte[13];
+    public static byte[] verifyPIN(byte p2Qualifier, byte[] pinData) {
+    	if((pinData==null)||(pinData.length<8)) {
+    		throw new IllegalArgumentException("Invalid PIN data for VERIFY");
+    	}
+        byte[] cmd = new byte[5+pinData.length];
         cmd[0] = 0x00;
         cmd[1] = 0x20;
         cmd[2] = 0x00;
-
-        //EMV book 3 Table 23 (page 88) lists 7 qualifiers,
-        //but only 2 are relevant in our case (hence the use of boolean)
-        byte p2QualifierPlaintextPIN = (byte) 0x80;
-        byte p2QualifierEncipheredPIN = (byte) 0x88;
-        if (transmitInPlaintext) {
-            cmd[3] = p2QualifierPlaintextPIN;
-            cmd[4] = 0x08; //Lc
-            cmd[5] = (byte)(0x20 | pin.length); //Control field (binary 0010xxxx)
-            //The remaining 8 bytes is the plaintext Offline PIN Block. This block is split into nibbles (4 bits)
-            Arrays.fill(cmd, 6, cmd.length, (byte)0xFF); //Filler bytes
-
-            boolean highNibble = true; //Alternate between high and low nibble
-            for (int i = 0; i < pin.length; i++) { //Put each PIN digit into its own nibble
-                int pos = i / 2;
-                int digit = Character.digit(pin[i], 10);
-                if (highNibble) {
-                    cmd[6 + pos] &= (byte) 0x0F; //Clear bits
-                    cmd[6 + pos] |= (byte) (digit << 4);
-
-                } else {
-                    cmd[6 + pos] &= (byte) 0xF0; //Clear bits
-                    cmd[6 + pos] |= (byte) (digit);
-                }
-                highNibble = !highNibble;
-            }
-
-        } else {
-            cmd[3] = p2QualifierEncipheredPIN;
-            //Encipher PIN
-            //TODO: Implement enciphered PIN
-            throw new UnsupportedOperationException("Enciphered PIN not implemented");
-        }
+        cmd[3] = p2Qualifier;
+        cmd[4] = (byte)pinData.length; //Lc
+        System.arraycopy(pinData, 0, cmd, 5, pinData.length);
 
         return cmd;
     }
 
     public static void main(String[] args) {
-        System.out.println(Util.prettyPrintHexNoWrap(verifyPIN(new char[]{'1','2','3','4'}, true)));
+        System.out.println(Util.prettyPrintHexNoWrap(verifyPIN((byte)0x80, EMVUtil.makeFormat2PinBlock(new char[]{'1','2','3','4'}))));
     }
 }
