@@ -52,8 +52,10 @@ public class Track2EquivalentData {
         int YY = Util.binaryHexCodedDecimalToInt(str.substring(fieldSepIndex + 1, fieldSepIndex + 3));
         int MM = Util.binaryHexCodedDecimalToInt(str.substring(fieldSepIndex + 3, fieldSepIndex + 5));
         Calendar cal = Calendar.getInstance();
-        cal.set(2000 + YY, MM - 1, 0, 0, 0, 0);
+        cal.set(2000 + YY, MM - 1, 1, 0, 0, 0);
         cal.set(Calendar.MILLISECOND, 0);
+        cal.add(Calendar.MONTH, 1);
+        cal.add(Calendar.DAY_OF_MONTH, -1);
         this.expirationDate = cal.getTime();
         serviceCode = new ServiceCode(str.substring(fieldSepIndex + 5, fieldSepIndex + 8).toCharArray());
         int padIndex = str.indexOf('F', fieldSepIndex + 8);
